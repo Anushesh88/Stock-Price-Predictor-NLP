@@ -92,12 +92,17 @@ Rather than using arbitrary fixed-percentage price thresholds, class boundaries 
   1 \quad (\text{Hold}), & -\theta_t \le R_{t+3} \le \theta_t
   \end{cases}$$
 
-### 3. Gated Attention & Multi-Class Focal Loss
+### 3. Gated Attention & Decoupled Multi-Class Focal Loss
 - **Cross-Attention**:
   $$A_t = \text{Softmax}\left(\frac{\mathbf{H}_{\text{lstm}} \cdot \mathbf{e}_{\text{text}}^\top}{\sqrt{d_{\text{hidden}}}}\right)$$
-- **Focal Loss**:
-  $$\mathcal{L}_{\text{Focal}} = -\alpha_c \cdot (1 - \hat{p}_{i, c})^\gamma \cdot \log(\hat{p}_{i, c})$$
-  with $\gamma = 2.0$ and inverse-frequency class weights $\alpha_c = \frac{N}{C \cdot N_c}$ to penalize majority-class bias.
+- **Decoupled Multi-Class Focal Loss**:
+  To prevent class weights $\alpha_c$ from corrupting the focusing probability $p_t$, cross-entropy is computed unweighted first to derive true model confidence:
+  $$p_t = \exp(-\text{CE}_{\text{unweighted}}), \quad \text{FocalTerm} = (1 - p_t)^\gamma$$
+  $$\mathcal{L}_{\text{Focal}} = \alpha_{y_i} \cdot (1 - p_t)^\gamma \cdot \text{CE}_{\text{unweighted}}$$
+
+### 4. Non-Overlapping Backtest & Split Boundary Purging
+- **Non-Overlapping Rebalancing**: Because $R_{t+3}$ is a 3-day forward return, daily cumsums inflate returns via triple-counting. The backtester rebalances strictly every $h = 3$ days (`[::horizon]`) for an honest, tradeable P&L curve.
+- **Leakage-Free Partition Purging**: An embargo of $(h - 1)$ trading days is purged at the Train/Val and Val/Test split boundaries, ensuring no training label's forward return reads future price data.
 
 ---
 
