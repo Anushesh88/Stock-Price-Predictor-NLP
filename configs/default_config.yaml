@@ -1,0 +1,64 @@
+# Configuration for Multimodal Stock Price Predictor (NLP + Time Series)
+
+project:
+  name: "stock-price-predictor-nlp"
+  ticker: "HDFCBANK.NS"
+  start_date: "2019-01-01"
+  end_date: null
+
+paths:
+  raw_data_dir: "data/raw"
+  processed_data_dir: "data/processed"
+  embedding_cache_dir: "data/processed/embedding_cache"
+  artifacts_dir: "artifacts"
+  bse_pattern: "data/raw/**/bse_*.json"
+  news_csv_path: "data/raw/sample_news.csv"
+
+features:
+  feature_cols:
+    - "Open"
+    - "High"
+    - "Low"
+    - "Close"
+    - "Volume"
+    - "rsi"
+    - "macd"
+    - "macd_signal"
+    - "stoch_k"
+    - "bb_width"
+    - "atr"
+    - "obv"
+    - "ema_20"
+    - "ema_50"
+    - "rolling_vol_20"
+  lookback: 30
+  warmup_drop: 50
+  horizon: 3
+  vol_multiplier: 0.75
+
+split:
+  train_ratio: 0.60
+  val_ratio: 0.20
+  test_ratio: 0.20
+
+nlp:
+  model_name: "ProsusAI/finbert"
+  max_seq_length: 512
+  embedding_dim: 768
+
+model:
+  hidden_dim: 96
+  lstm_layers: 2
+  dropout: 0.4
+  num_classes: 3
+
+training:
+  epochs: 25
+  batch_size: 32
+  learning_rate: 0.0003
+  weight_decay: 0.001
+  max_grad_norm: 1.0
+  focal_gamma: 2.0
+
+backtest:
+  transaction_cost_bps: 0.0005  # 5 bps per position change
