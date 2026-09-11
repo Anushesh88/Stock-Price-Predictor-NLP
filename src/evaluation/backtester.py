@@ -9,10 +9,11 @@ def run_backtest(
     predictions: Union[np.ndarray, List[int]],
     df_test: pd.DataFrame,
     lookback: int = 30,
+    horizon: int = 3,
     transaction_cost_bps: float = 0.0005
 ) -> Dict[str, Union[float, np.ndarray]]:
     """
-    Simulates a multi-horizon trading backtest with transaction friction.
+    Simulates a non-overlapping multi-horizon trading backtest with transaction friction.
 
     Position Mapping:
       - 2 (Buy)  -> Long (+1)
@@ -20,14 +21,16 @@ def run_backtest(
       - 1 (Hold) -> Flat (0)
 
     Trading Dynamics:
+      - Rebalances every `horizon` trading days to prevent return overlap distortion.
       - Strategy return = position * fwd_return
-      - Transaction cost charged on position switches: |position_t - position_{t-1}| * cost_bps
+      - Transaction friction charged on position rebalances: |position_t - position_{t-1}| * cost_bps
       - Net return = Strategy return - Transaction costs
 
     Args:
         predictions: Model class predictions [0, 1, 2] of length M.
         df_test: Test DataFrame containing 'fwd_return'.
         lookback: Sequence lookback offset (default: 30).
+        horizon: Holding period in trading days (default: 3).
         transaction_cost_bps: Cost per position turnover (default: 0.0005 = 5 bps).
 
     Returns:
@@ -45,6 +48,10 @@ def run_backtest(
     positions = positions[:min_len]
     test_fwd_returns = test_fwd_returns[:min_len]
 
+    # Non-overlapping sampling: rebalance only every `horizon` days
+    positions = positions[::horizon]
+    test_fwd_returns = test_fwd_returns[::horizon]
+
     # Gross Strategy Return
     strategy_returns = positions * test_fwd_returns
 
@@ -59,7 +66,7 @@ def run_backtest(
     cum_strategy_net = np.cumsum(net_strategy_returns)
 
     results = {
-        "trading_windows": int(min_len),
+        "trading_windows": int(len(positions)),
         "total_trades": int(np.sum(trades > 0)),
         "cum_market_return": float(cum_market_returns[-1]) if len(cum_market_returns) > 0 else 0.0,
         "cum_strategy_gross": float(cum_strategy_gross[-1]) if len(cum_strategy_gross) > 0 else 0.0,

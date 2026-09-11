@@ -25,8 +25,16 @@ class FocalLoss(nn.Module):
             logits: Predicted raw scores of shape [Batch, NumClasses]
             targets: Ground truth class indices of shape [Batch]
         """
-        # Cross entropy without reduction to compute per-sample loss
-        ce_loss = F.cross_entropy(logits, targets, reduction="none", weight=self.alpha)
+        # Unweighted cross entropy without reduction to compute genuine p_t
+        ce_loss = F.cross_entropy(logits, targets, reduction="none")
         pt = torch.exp(-ce_loss)
-        focal_loss = ((1.0 - pt) ** self.gamma) * ce_loss
+        focal_term = (1.0 - pt) ** self.gamma
+
+        if self.alpha is not None:
+            alpha = self.alpha.to(device=logits.device, dtype=logits.dtype)
+            alpha_t = alpha[targets]
+            focal_loss = alpha_t * focal_term * ce_loss
+        else:
+            focal_loss = focal_term * ce_loss
+
         return focal_loss.mean()

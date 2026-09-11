@@ -40,19 +40,23 @@ def main():
     vol_mult = cfg["features"]["vol_multiplier"]
     df_labeled = create_dynamic_volatility_labels(df_feat, horizon=horizon, vol_multiplier=vol_mult)
 
-    # 3. Chronological Train / Val / Test Partitioning
+    # 3. Chronological Train / Val / Test Partitioning with Boundary Purging
     train_ratio = cfg["split"]["train_ratio"]
     val_ratio = cfg["split"]["val_ratio"]
 
     n = len(df_labeled)
-    train_idx = int(n * train_ratio)
-    val_idx = int(n * (train_ratio + val_ratio))
+    raw_train_end = int(n * train_ratio)
+    raw_val_end = int(n * (train_ratio + val_ratio))
 
-    df_train = df_labeled.iloc[:train_idx].copy()
-    df_val = df_labeled.iloc[train_idx:val_idx].copy()
-    df_test = df_labeled.iloc[val_idx:].copy()
+    # Drop (horizon - 1) overlap rows at partition boundaries to prevent forward lookahead leakage
+    train_end = raw_train_end - (horizon - 1)
+    val_end = raw_val_end - (horizon - 1)
 
-    logger.info(f"Partition Splits -> Train: {len(df_train)} | Val: {len(df_val)} | Test: {len(df_test)}")
+    df_train = df_labeled.iloc[:train_end].copy()
+    df_val = df_labeled.iloc[raw_train_end:val_end].copy()
+    df_test = df_labeled.iloc[raw_val_end:].copy()
+
+    logger.info(f"Partition Splits (Purged {horizon - 1} boundary rows) -> Train: {len(df_train)} | Val: {len(df_val)} | Test: {len(df_test)}")
 
     # 4. Strict Leakage-Free Scaling (Fitted exclusively on Train partition)
     feature_cols = cfg["features"]["feature_cols"]

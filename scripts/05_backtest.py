@@ -61,11 +61,12 @@ def main():
     # 3. Evaluation
     targets, preds, report = evaluate_model(model, test_loader, device=device)
 
-    # 4. Multi-Horizon Backtesting Simulation
+    horizon = cfg["features"].get("horizon", 3)
     results = run_backtest(
         predictions=preds,
         df_test=df_test,
         lookback=lookback,
+        horizon=horizon,
         transaction_cost_bps=cost_bps
     )
 
