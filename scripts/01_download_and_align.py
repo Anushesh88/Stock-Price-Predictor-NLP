@@ -1,4 +1,5 @@
 import argparse
+import glob
 import os
 import sys
 import yaml
@@ -52,10 +53,12 @@ def main():
     if bse_pattern:
         text_records.extend(ingest_bse_filings(bse_pattern, map_fn))
 
-    # Ingest News CSV
-    news_csv = cfg["paths"].get("news_csv_path", "")
-    if news_csv:
-        text_records.extend(ingest_news_csv(news_csv, map_fn))
+    # Ingest News CSV files from data/raw/
+    raw_dir = cfg["paths"].get("raw_data_dir", "data/raw")
+    news_csv_files = glob.glob(os.path.join(raw_dir, "*.csv"))
+    logger.info(f"Found {len(news_csv_files)} news CSV file(s) in {raw_dir}: {[os.path.basename(f) for f in news_csv_files]}")
+    for n_csv in news_csv_files:
+        text_records.extend(ingest_news_csv(n_csv, map_fn))
 
     # 3. Align Multimodal Stream
     df_aligned = align_multimodal_data(df_prices, text_records)

@@ -83,7 +83,7 @@ def ingest_bse_filings(bse_pattern: str, map_fn) -> List[dict]:
 def ingest_news_csv(csv_path: str, map_fn) -> List[dict]:
     """
     Ingests news articles or sentiment headlines from CSV files.
-    Automatically detects timestamp, headline, and description columns.
+    Robustly parses dates across Business Standard, Kaggle, and custom formats.
     """
     if not os.path.exists(csv_path):
         logger.warning(f"News CSV not found at: {csv_path}")
@@ -91,31 +91,43 @@ def ingest_news_csv(csv_path: str, map_fn) -> List[dict]:
 
     logger.info(f"Ingesting news from CSV: {csv_path}")
     df_news = pd.read_csv(csv_path)
-    date_col = next((c for c in df_news.columns if any(k in c.lower() for k in ["date", "time", "timestamp"])), None)
+
+    # Prioritize standard timestamp columns
+    if "timestamp" in df_news.columns:
+        date_col = "timestamp"
+    elif "date" in df_news.columns:
+        date_col = "date"
+    else:
+        date_col = next((c for c in df_news.columns if any(k in c.lower() for k in ["date", "time", "timestamp"])), None)
+
     headline_col = next((c for c in df_news.columns if any(k in c.lower() for k in ["headline", "title", "subject"])), None)
-    desc_col = next((c for c in df_news.columns if any(k in c.lower() for k in ["desc", "body", "text", "news"])), None)
+    desc_col = next((c for c in df_news.columns if any(k in c.lower() for k in ["desc", "body", "text"]) and c != headline_col), None)
 
     if not date_col:
         logger.warning(f"Could not identify a date/timestamp column in {csv_path}.")
         return []
 
-    df_news[date_col] = pd.to_datetime(df_news[date_col], errors="coerce").dt.tz_localize(None)
-    records = []
+    # Parse dates with support for Indian standard timestamps (e.g. '08:07:25 29/04/2025 pm IST')
+    series_str = df_news[date_col].astype(str).str.replace(r"\s*(am|pm)\s*ist", "", case=False, regex=True).str.strip()
+    parsed_dates = pd.to_datetime(series_str, format="%H:%M:%S %d/%m/%Y", errors="coerce")
+    fallback_dates = pd.to_datetime(df_news[date_col], errors="coerce")
+    df_news["_clean_dt"] = parsed_dates.fillna(fallback_dates).dt.tz_localize(None)
 
-    for _, row in df_news.dropna(subset=[date_col]).iterrows():
-        tdate = map_fn(row[date_col])
+    records = []
+    for _, row in df_news.dropna(subset=["_clean_dt"]).iterrows():
+        tdate = map_fn(row["_clean_dt"])
         if not tdate:
             continue
 
         parts = []
         if headline_col and pd.notna(row.get(headline_col)):
             parts.append(str(row[headline_col]).strip())
-        if desc_col and pd.notna(row.get(desc_col)) and desc_col != headline_col:
+        if desc_col and pd.notna(row.get(desc_col)):
             parts.append(str(row[desc_col]).strip())
 
         text = ". ".join(parts).strip()
         if text:
-            records.append({"trading_date": tdate, "clean_text": text, "source": "NewsCSV"})
+            records.append({"trading_date": tdate, "clean_text": text, "source": os.path.basename(csv_path)})
 
     logger.info(f"Extracted {len(records)} news records from {csv_path}.")
     return records
